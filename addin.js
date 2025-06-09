@@ -330,7 +330,7 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Handle drag start
      */
-    window.drag = function(event) {
+    drag = function(event) {
         const zoneId = event.target.dataset.zoneId;
         const zoneName = event.target.dataset.zoneName;
         const currentType = event.target.dataset.currentType;
@@ -345,14 +345,14 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Allow drop
      */
-    window.allowDrop = function(event) {
+    allowDrop = function(event) {
         event.preventDefault();
     };
 
     /**
      * Handle drag enter
      */
-    window.dragEnter = function(event) {
+    dragEnter = function(event) {
         event.preventDefault();
         event.currentTarget.classList.add('drag-over');
     };
@@ -360,7 +360,7 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Handle drag leave
      */
-    window.dragLeave = function(event) {
+    dragLeave = function(event) {
         // Only remove the class if we're leaving the container itself, not a child
         if (!event.currentTarget.contains(event.relatedTarget)) {
             event.currentTarget.classList.remove('drag-over');
@@ -370,7 +370,7 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Handle drop
      */
-    window.drop = async function(event, targetType) {
+    drop = async function(event, targetType) {
         event.preventDefault();
         event.currentTarget.classList.remove('drag-over');
         
@@ -442,7 +442,7 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Clear search input and reset filtered zones
      */
-    window.clearSearch = function(type) {
+    clearSearch = function(type) {
         const searchInput = document.getElementById(type === 'regular' ? 'regularSearch' : 'yardMoveSearch');
         if (searchInput) {
             searchInput.value = '';
@@ -453,14 +453,14 @@ geotab.addin.yardMoveZones = function () {
     /**
      * Refresh zones data
      */
-    window.refreshZones = async function() {
+    refreshZones = async function() {
         await loadZones();
     };
 
     /**
      * Export zones data as JSON
      */
-    window.exportZones = function() {
+    exportZones = function() {
         const data = {
             timestamp: new Date().toISOString(),
             yardMoveTypeId: yardMoveTypeId,
@@ -583,6 +583,18 @@ geotab.addin.yardMoveZones = function () {
             if (elAddin) {
                 elAddin.style.display = 'block';
             }
+
+            window.filterZones = filterZones;
+            window.openCreateZone = openCreateZone;
+            window.loadZones = loadZones;
+            window.drag = drag;
+            window.allowDrop = allowDrop;
+            window.dragEnter = dragEnter;
+            window.dragLeave = dragLeave;
+            window.drop = drop;
+            window.clearSearch = clearSearch;
+            window.refreshZones = refreshZones;
+            window.exportZones = exportZones;
         },
 
         /**
