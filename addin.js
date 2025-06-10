@@ -47,7 +47,7 @@ geotab.addin.yardMoveZones = function () {
             showAlert('Loading zones and checking zone types...', 'info');
             
             // First, update the .env file with current database info
-            await updateEnvFile();
+            //await updateEnvFile();
             
             // Get zone types first
             const zoneTypes = await makeGeotabCall("Get", "ZoneType");
