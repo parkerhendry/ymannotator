@@ -35,6 +35,42 @@ geotab.addin.yardMoveZones = function () {
     }
 
     /**
+     * Add current database to Firestore if it doesn't exist
+     */
+    async function ensureDatabaseInFirestore() {
+        if (!api || !window.db) {
+            return;
+        }
+        
+        try {
+            api.getSession(async function(session) {
+                const databaseName = session.database;
+                
+                if (databaseName && databaseName !== 'demo') {
+                    // Check if database already exists
+                    const querySnapshot = await window.db.collection('geotab_databases')
+                        .where('database_name', '==', databaseName)
+                        .get();
+                    
+                    if (querySnapshot.empty) {
+                        // Add new database
+                        await window.db.collection('geotab_databases').add({
+                            database_name: databaseName,
+                            added_at: firebase.firestore.FieldValue.serverTimestamp(),
+                            active: true
+                        });
+                        console.log(`Added database ${databaseName} to Firestore`);
+                    } else {
+                        console.log(`Database ${databaseName} already exists in Firestore`);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error ensuring database in Firestore:', error);
+        }
+    }
+
+    /**
      * Load zones from Geotab API
      */
     async function loadZones() {
@@ -591,6 +627,9 @@ geotab.addin.yardMoveZones = function () {
         focus: function (freshApi, freshState) {
             api = freshApi;
             state = freshState;
+
+            // Ensure current database is in Firestore
+            ensureDatabaseInFirestore();
 
             // Setup event listeners
             setupEventListeners();
