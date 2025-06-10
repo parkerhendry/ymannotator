@@ -44,15 +44,15 @@ geotab.addin.yardMoveZones = function () {
         }
         
         try {
-            showAlert('Loading zones...', 'info');
+            showAlert('Loading zones and checking zone types...', 'info');
             
-            // Get all zones and zone types in parallel
-            const [zones, zoneTypes] = await Promise.all([
-                makeGeotabCall("Get", "Zone"),
-                makeGeotabCall("Get", "ZoneType")
-            ]);
+            // First, update the .env file with current database info
+            await updateEnvFile();
             
-            // Find the "Yard Move Zones" type ID
+            // Get zone types first
+            const zoneTypes = await makeGeotabCall("Get", "ZoneType");
+            
+            // Check if "Yard Move Zones" type exists
             yardMoveTypeId = null;
             for (const zoneType of zoneTypes) {
                 if (zoneType.name === "Yard Move Zones") {
@@ -61,9 +61,28 @@ geotab.addin.yardMoveZones = function () {
                 }
             }
             
+            // If "Yard Move Zones" type doesn't exist, create it
             if (!yardMoveTypeId) {
-                showAlert('Warning: "Yard Move Zones" zone type not found. Please create this zone type first.', 'warning');
+                showAlert('Creating "Yard Move Zones" zone type...', 'info');
+                try {
+                    const newZoneType = {
+                        name: "Yard Move Zones",
+                        id: null,
+                        version: null
+                    };
+                    
+                    const result = await makeGeotabCall("Add", "ZoneType", { entity: newZoneType });
+                    yardMoveTypeId = result;
+                    showAlert('Successfully created "Yard Move Zones" zone type', 'success');
+                } catch (error) {
+                    console.error('Error creating zone type:', error);
+                    showAlert('Error creating "Yard Move Zones" zone type: ' + error.message, 'danger');
+                    return;
+                }
             }
+            
+            // Now get all zones
+            const zones = await makeGeotabCall("Get", "Zone");
             
             // Categorize zones
             regularZones = [];
