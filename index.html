@@ -109,7 +109,6 @@
     <script src="addin.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script>
     // Initialize Firebase (replace with your config)
     const firebaseConfig = {
@@ -123,15 +122,6 @@
     
     firebase.initializeApp(firebaseConfig);
     window.db = firebase.firestore();
-
-    // 2. Sign in anonymously
-    firebase.auth().signInAnonymously()
-        .then(() => {
-            console.log("✅ Signed in anonymously");
-        })
-        .catch((error) => {
-            console.error("❌ Firebase auth error:", error);
-        });
     </script>
 </body>
 </html>
