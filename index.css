@@ -1,242 +1,215 @@
-body {
-    background-color: #f8f9fa;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+/* Ruckit Assets Add-in Custom Styles */
+
+/* Company Colors */
+:root {
+    --ruckit-blue: #2E86AB;
+    --ruckit-orange: #FF6B35;
+    --ruckit-light-blue: rgba(46, 134, 171, 0.1);
+    --ruckit-light-orange: rgba(255, 107, 53, 0.1);
 }
 
-.header {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    color: white;
-    padding: 1.5rem 0;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-    position: relative;
-    overflow: hidden;
+/* Header Styles */
+.ruckit-header {
+    background: linear-gradient(135deg, var(--ruckit-blue) 0%, var(--ruckit-orange) 100%);
+    padding: 2rem;
+    border-radius: 12px;
+    margin-top: 1rem;
 }
 
-.header::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.05) 50%, transparent 70%);
-    pointer-events: none;
+.company-logo-link {
+    text-decoration: none;
+    transition: transform 0.3s ease;
 }
 
-.header-content {
-    position: relative;
-    z-index: 2;
+.company-logo-link:hover {
+    transform: scale(1.05);
 }
 
 .company-logo {
-    max-height: 50px;
-    width: auto;
     transition: all 0.3s ease;
-    filter: brightness(1.1);
 }
 
-.company-logo:hover {
-    transform: scale(1.05);
-    filter: brightness(1.2);
-}
-
-.header-title {
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin: 0;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-}
-
-.header-subtitle {
-    font-size: 0.95rem;
-    opacity: 0.9;
-    margin: 0;
-    font-weight: 300;
-}
-
-.header-buttons {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.zone-container {
-    background: white;
-    border-radius: 15px;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    min-height: 500px;
-    max-height: 70vh;
-    overflow-y: auto;
-    transition: all 0.3s ease;
-    border: 3px dashed transparent;
-}
-
-.zone-container.drag-over {
-    border-color: #ff6b35;
-    background-color: #fff8f6;
-    transform: scale(1.02);
-}
-
-.zone-item {
-    background: linear-gradient(135deg, #e55a2b 0%, #d4761a 100%);
-    color: white;
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin: 8px 0;
-    cursor: grab;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    border: none;
-}
-
-.zone-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
-
-.zone-item:active {
-    cursor: grabbing;
-    transform: scale(0.98);
-}
-
-.yard-move-zone {
-    background: linear-gradient(135deg, #03adfc 0%, #0394fc 100%);
-}
-
-.zone-header {
-    text-align: center;
-    padding: 20px 20px 15px 20px;
-    border-bottom: 2px solid #e9ecef;
-    background: linear-gradient(135deg, #e55a2b 0%, #d4761a 100%);
-    color: white;
-    border-radius: 15px 15px 0 0;
-    margin: -15px -15px 0 -15px;
-}
-
-.zone-header.aqua {
-    background: linear-gradient(135deg, #03adfc 0%, #0394fc 100%);
-}
-
-.search-container {
-    padding: 15px 20px 20px 20px;
-    background: white;
-    margin: 0 -15px 20px -15px;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.search-input {
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 14px;
-    transition: all 0.2s ease;
-}
-
-.search-input:focus {
-    border-color: #ff6b35;
-    box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
-    outline: none;
-}
-
-.search-input.aqua:focus {
-    border-color: #00bcd4;
-    box-shadow: 0 0 0 0.2rem rgba(0, 188, 212, 0.25);
-}
-
-.zone-header h4 {
-    margin: 0;
-    font-weight: 600;
-}
-
-.zone-count {
-    font-size: 0.9em;
-    opacity: 0.9;
-    margin-top: 5px;
-}
-
-.loading-spinner {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 200px;
-}
-
-.empty-state {
-    text-align: center;
-    color: #6c757d;
-    padding: 40px 20px;
-}
-
-.empty-state i {
-    font-size: 3rem;
+/* Alert Styles for Custom Alerts */
+.alert-container {
     margin-bottom: 1rem;
-    opacity: 0.5;
 }
 
-.alert {
-    border-radius: 10px;
+.alert-container .alert {
     border: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: slideIn 0.3s ease;
 }
 
-.btn-refresh {
-    background: linear-gradient(135deg, #e55a2b 0%, #d4761a 100%);
+.alert-info {
+    background-color: var(--ruckit-light-blue);
+    color: var(--ruckit-blue);
+    border-left: 4px solid var(--ruckit-blue);
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.alert-close {
+    background: none;
     border: none;
-    border-radius: 25px;
-    padding: 10px 20px;
-    color: white;
-    transition: all 0.3s ease;
-    font-weight: 500;
-    box-shadow: 0 4px 15px rgba(229, 90, 43, 0.3);
+    font-size: 1.5rem;
+    cursor: pointer;
+    opacity: 0.7;
+    color: inherit;
+    padding: 0;
+    line-height: 1;
 }
 
-.btn-refresh:hover {
+.alert-close:hover {
+    opacity: 1;
+}
+
+/* Custom Button Styles */
+.btn-primary {
+    background-color: var(--ruckit-blue);
+    border-color: var(--ruckit-blue);
+}
+
+.btn-primary:hover {
+    background-color: #1a5f7a;
+    border-color: #1a5f7a;
+}
+
+.btn-warning {
+    background-color: var(--ruckit-orange);
+    border-color: var(--ruckit-orange);
+}
+
+.btn-warning:hover {
+    background-color: #e55a2b;
+    border-color: #e55a2b;
+}
+
+.btn-outline-light:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Table Customizations */
+.table-dark {
+    background: linear-gradient(135deg, var(--ruckit-blue) 0%, var(--ruckit-orange) 100%);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--ruckit-light-blue);
+}
+
+.text-primary {
+    color: var(--ruckit-blue) !important;
+}
+
+.text-warning {
+    color: var(--ruckit-orange) !important;
+}
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(229, 90, 43, 0.4);
-    color: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
 }
 
-.btn-create-zone {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    border: none;
-    border-radius: 25px;
-    padding: 10px 20px;
-    color: white;
-    transition: all 0.3s ease;
-    font-weight: 500;
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+/* Custom loading spinner colors */
+.spinner-border.text-primary {
+    color: var(--ruckit-blue) !important;
 }
 
-.btn-create-zone:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
-    color: white;
-}
-
-.main-container {
-    padding: 2rem 0;
-}
-
+/* Responsive adjustments */
 @media (max-width: 768px) {
-    .zone-container {
-        min-height: 300px;
-        margin-bottom: 20px;
+    .ruckit-header {
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .ruckit-header .row > div {
+        margin-bottom: 1rem;
+    }
+    
+    .ruckit-header .col-md-4 {
+        text-align: center !important;
+    }
+}
+
+/* Animation for alerts */
+@keyframes slideIn {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+} {
+    .header-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .stats-bar {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .stat-divider {
+        width: 100%;
+        height: 1px;
+    }
+    
+    .table-footer {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .footer-content {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .title-section h1 {
+        font-size: 2rem;
+    }
+    
+    .main-content {
+        padding: 1rem;
     }
     
     .header {
-        padding: 1rem 0;
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .ruckit-table th,
+    .ruckit-table td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.9rem;
     }
     
-    .header-title {
-        font-size: 1.5rem;
-    }
-    
-    .header-buttons {
-        flex-direction: column;
-        gap: 8px;
-    }
-    
-    .btn-refresh, .btn-create-zone {
-        width: 100%;
+    .view-asset-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
     }
 }
