@@ -1,14 +1,20 @@
 /**
- * Geotab Ruckit Assets Add-in
+ * Geotab Yard Move Zones Add-in
  * @returns {{initialize: Function, focus: Function, blur: Function}}
  */
-geotab.addin.ruckitAssets = function () {
+geotab.addin.yardMoveZones = function () {
     'use strict';
 
     let api;
     let state;
     let elAddin;
-    let ruckitMappings = [];
+    
+    // Global variables for zone management
+    let yardMoveTypeId = null;
+    let regularZones = [];
+    let yardMoveZones = [];
+    let filteredRegularZones = [];
+    let filteredYardMoveZones = [];
 
     /**
      * Make a Geotab API call
@@ -29,21 +35,218 @@ geotab.addin.ruckitAssets = function () {
     }
 
     /**
-     * Get AddInData entries for Ruckit mappings
+     * Add current database to Firestore if it doesn't exist
      */
-    async function getRuckitMappings() {
-        try {
-            const searchParams = {
-                whereClause: 'type = "ri-device"'
-            };
-            
-            const data = await makeGeotabCall("Get", "AddInData", { search: searchParams });
-            return data || [];
-        } catch (error) {
-            console.error('Error fetching Ruckit mappings:', error);
-            showAlert('Error fetching Ruckit mappings: ' + error.message, 'error');
-            return [];
+    async function ensureDatabaseInFirestore() {
+        if (!api || !window.db) {
+            return;
         }
+        
+        try {
+            api.getSession(async function(session) {
+                const databaseName = session.database;
+                
+                if (databaseName && databaseName !== 'demo') {
+                    // Check if database already exists
+                    const querySnapshot = await window.db.collection('geotab_databases')
+                        .where('database_name', '==', databaseName)
+                        .get();
+                    
+                    if (querySnapshot.empty) {
+                        // Add new database
+                        await window.db.collection('geotab_databases').add({
+                            database_name: databaseName,
+                            added_at: firebase.firestore.FieldValue.serverTimestamp(),
+                            active: true
+                        });
+                        console.log(`Added database ${databaseName} to Firestore`);
+                    } else {
+                        console.log(`Database ${databaseName} already exists in Firestore`);
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error ensuring database in Firestore:', error);
+        }
+    }
+
+    /**
+     * Load zones from Geotab API
+     */
+    async function loadZones() {
+        if (!api) {
+            showAlert('Geotab API not initialized. Please refresh the page.', 'danger');
+            return;
+        }
+        
+        try {
+            showAlert('Loading zones and checking zone types...', 'info');
+            
+            // First, update the .env file with current database info
+            //await updateEnvFile();
+            
+            // Get zone types first
+            const zoneTypes = await makeGeotabCall("Get", "ZoneType");
+            
+            // Check if "Yard Move Zones" type exists
+            yardMoveTypeId = null;
+            for (const zoneType of zoneTypes) {
+                if (zoneType.name === "Yard Move Zones") {
+                    yardMoveTypeId = zoneType.id;
+                    break;
+                }
+            }
+            
+            // If "Yard Move Zones" type doesn't exist, create it
+            if (!yardMoveTypeId) {
+                showAlert('Creating "Yard Move Zones" zone type...', 'info');
+                try {
+                    const newZoneType = {
+                        name: "Yard Move Zones",
+                        id: null,
+                        version: null
+                    };
+                    
+                    const result = await makeGeotabCall("Add", "ZoneType", { entity: newZoneType });
+                    yardMoveTypeId = result;
+                    showAlert('Successfully created "Yard Move Zones" zone type', 'success');
+                } catch (error) {
+                    console.error('Error creating zone type:', error);
+                    showAlert('Error creating "Yard Move Zones" zone type: ' + error.message, 'danger');
+                    return;
+                }
+            }
+            
+            // Now get all zones
+            const zones = await makeGeotabCall("Get", "Zone");
+            
+            // Categorize zones
+            regularZones = [];
+            yardMoveZones = [];
+            
+            for (const zone of zones) {
+                const zoneHasYardMoveType = zone.zoneTypes && zone.zoneTypes.some(zt => zt.id === yardMoveTypeId);
+                
+                const zoneData = {
+                    id: zone.id,
+                    name: zone.name || 'Unnamed Zone',
+                    zoneTypes: zone.zoneTypes || [],
+                    points: zone.points || [],
+                    version: zone.version
+                };
+                
+                if (zoneHasYardMoveType) {
+                    yardMoveZones.push(zoneData);
+                } else {
+                    regularZones.push(zoneData);
+                }
+            }
+            
+            // Initialize filtered arrays
+            filteredRegularZones = [...regularZones];
+            filteredYardMoveZones = [...yardMoveZones];
+            
+            renderZones();
+            showAlert(`Loaded ${regularZones.length + yardMoveZones.length} zones successfully`, 'success');
+            
+        } catch (error) {
+            console.error('Error loading zones:', error);
+            showAlert('Error loading zones: ' + error.message, 'danger');
+            showEmptyState('regularZonesList');
+            showEmptyState('yardMoveZonesList');
+        }
+    }
+
+    /**
+     * Add Yard Move Zones type to a zone
+     */
+    async function addYardMoveType(zoneId) {
+        if (!api || !yardMoveTypeId) {
+            throw new Error('API not initialized or Yard Move type not found');
+        }
+        
+        // Get the current zone data
+        const zones = await makeGeotabCall("Get", "Zone", { search: { id: zoneId } });
+        if (!zones || zones.length === 0) {
+            throw new Error('Zone not found');
+        }
+        
+        const zone = zones[0];
+        
+        // Check if the zone already has the yard move type
+        const existingZoneTypes = zone.zoneTypes || [];
+        const hasYardMoveType = existingZoneTypes.some(zt => zt.id === yardMoveTypeId);
+        
+        if (hasYardMoveType) {
+            throw new Error('Zone already has Yard Move Zones type');
+        }
+        
+        // Add the yard move type to the zone
+        const updatedZoneTypes = [...existingZoneTypes, { id: yardMoveTypeId }];
+        
+        // Prepare the updated zone entity
+        const updatedZone = {
+            id: zone.id,
+            name: zone.name,
+            zoneTypes: updatedZoneTypes,
+            points: zone.points || [],
+            version: zone.version
+        };
+        
+        // Update the zone using Set method
+        const result = await makeGeotabCall("Set", "Zone", { entity: updatedZone });
+        return result;
+    }
+
+    /**
+     * Remove Yard Move Zones type from a zone
+     */
+    async function removeYardMoveType(zoneId) {
+        if (!api || !yardMoveTypeId) {
+            throw new Error('API not initialized or Yard Move type not found');
+        }
+        
+        // Get the current zone data
+        const zones = await makeGeotabCall("Get", "Zone", { search: { id: zoneId } });
+        if (!zones || zones.length === 0) {
+            throw new Error('Zone not found');
+        }
+        
+        const zone = zones[0];
+        
+        // Remove the yard move type from the zone
+        const existingZoneTypes = zone.zoneTypes || [];
+        const updatedZoneTypes = existingZoneTypes.filter(zt => zt.id !== yardMoveTypeId);
+        
+        // Prepare the updated zone entity
+        const updatedZone = {
+            id: zone.id,
+            name: zone.name,
+            zoneTypes: updatedZoneTypes,
+            points: zone.points || [],
+            version: zone.version
+        };
+        
+        // Update the zone using Set method
+        const result = await makeGeotabCall("Set", "Zone", { entity: updatedZone });
+        return result;
+    }
+
+    /**
+     * Open the create zone page in Geotab
+     */
+    function openCreateZone() {
+        if (!api) {
+            showAlert('Geotab API not initialized', 'danger');
+            return;
+        }
+        
+        // Get database name from the API session
+        api.getSession(function(session) {
+            const database = session.database || 'demo';
+            const createZoneUrl = `https://my.geotab.com/${database}/#map,createNewZone:!t,drivers:all`;
+            window.open(createZoneUrl, '_blank');
+        });
     }
 
     /**
@@ -55,13 +258,18 @@ geotab.addin.ruckitAssets = function () {
         
         const alertId = 'alert-' + Date.now();
         
-        const alertClass = type === 'error' ? 'alert-error' : 
-                          type === 'success' ? 'alert-success' : 'alert-info';
+        const iconMap = {
+            'success': 'check-circle',
+            'danger': 'exclamation-triangle',
+            'warning': 'exclamation-triangle',
+            'info': 'info-circle'
+        };
         
         const alertHtml = `
-            <div class="alert ${alertClass}" id="${alertId}">
-                <span class="alert-message">${message}</span>
-                <button type="button" class="alert-close" onclick="document.getElementById('${alertId}').remove()">×</button>
+            <div class="alert alert-${type} alert-dismissible fade show" id="${alertId}" role="alert">
+                <i class="fas fa-${iconMap[type]} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         `;
         
@@ -70,194 +278,333 @@ geotab.addin.ruckitAssets = function () {
         // Auto-remove after 5 seconds
         setTimeout(() => {
             const alert = document.getElementById(alertId);
-            if (alert) {
-                alert.remove();
+            if (alert && typeof bootstrap !== 'undefined' && bootstrap.Alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
             }
-        }, 5000);
+        }, 3000);
     }
 
     /**
-     * Load and display Ruckit mappings
+     * Render zones in the UI
      */
-    async function loadRuckitMappings() {
-        try {
-            showAlert('Loading Ruckit assets...', 'info');
-            
-            ruckitMappings = await getRuckitMappings();
-            renderMappingsTable();
-            
-            if (ruckitMappings.length > 0) {
-                showAlert(`Successfully loaded ${ruckitMappings.length} Ruckit assets`, 'success');
-            } else {
-                showAlert('No Ruckit assets found', 'info');
-            }
-            
-        } catch (error) {
-            console.error('Error loading Ruckit mappings:', error);
-            showAlert('Error loading Ruckit assets: ' + error.message, 'error');
+    function renderZones() {
+        renderZoneList('regularZonesList', filteredRegularZones, 'regular');
+        renderZoneList('yardMoveZonesList', filteredYardMoveZones, 'yardmove');
+        updateCounts();
+    }
+
+    /**
+     * Filter zones based on search input
+     */
+    function filterZones(type) {
+        const searchTerm = document.getElementById(type === 'regular' ? 'regularSearch' : 'yardMoveSearch').value.toLowerCase();
+        
+        if (type === 'regular') {
+            filteredRegularZones = regularZones.filter(zone => 
+                zone.name.toLowerCase().includes(searchTerm) || 
+                zone.id.toLowerCase().includes(searchTerm)
+            );
+            renderZoneList('regularZonesList', filteredRegularZones, 'regular');
+        } else {
+            filteredYardMoveZones = yardMoveZones.filter(zone => 
+                zone.name.toLowerCase().includes(searchTerm) || 
+                zone.id.toLowerCase().includes(searchTerm)
+            );
+            renderZoneList('yardMoveZonesList', filteredYardMoveZones, 'yardmove');
         }
+        
+        updateCounts();
     }
 
     /**
-     * Render the mappings table
+     * Render a list of zones
      */
-    function renderMappingsTable() {
-        const tableContainer = document.getElementById('mappingsTable');
-        if (!tableContainer) return;
-
-        if (ruckitMappings.length === 0) {
-            tableContainer.innerHTML = `
-                <div class="empty-state text-center p-5">
-                    <div class="empty-icon mb-3" style="font-size: 4rem;">📊</div>
-                    <h3 class="mb-3">No Ruckit Assets Found</h3>
-                    <p class="text-muted">There are currently no Ruckit device mappings configured in this database.</p>
-                </div>
-            `;
+    function renderZoneList(containerId, zones, type) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        if (zones.length === 0) {
+            showEmptyState(containerId);
             return;
         }
-
-        const tableHtml = `
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-dark">
-                        <tr>
-                            <th scope="col">Asset Name</th>
-                            <th scope="col">Ruckit Device</th>
-                            <th scope="col">Ruckit Driver</th>
-                            <th scope="col">Ruckit Token</th>
-                            <th scope="col" class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${ruckitMappings.map(mapping => {
-                            const details = mapping.details || {};
-                            const name = details.name || 'N/A';
-                            const riDevice = details['ri-device'] || 'N/A';
-                            const riDriver = details['ri-driver'] || 'N/A';
-                            const riToken = details['ri-token'] || 'N/A';
-                            const gtDevice = details['gt-device'] || '';
-                            
-                            return `
-                                <tr>
-                                    <td class="fw-bold text-primary">${name}</td>
-                                    <td>${riDevice}</td>
-                                    <td>${riDriver}</td>
-                                    <td><code class="text-muted">${riToken}</code></td>
-                                    <td class="text-center">
-                                        ${gtDevice ? 
-                                            `<button class="btn btn-warning btn-sm" onclick="window.open('https://my.geotab.com/traxxisdemo/#device,id:${gtDevice}', '_blank')">
-                                                <i class="fas fa-external-link-alt me-1"></i>View Asset
-                                            </button>` :
-                                            '<span class="text-muted fst-italic">No Device ID</span>'
-                                        }
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-            <div class="d-flex justify-content-between align-items-center p-3 bg-light border-top">
-                <div class="text-muted">
-                    Showing ${ruckitMappings.length} asset${ruckitMappings.length !== 1 ? 's' : ''}
+        
+        const zonesHtml = zones.map(zone => `
+            <div class="zone-item ${type === 'yardmove' ? 'yard-move-zone' : ''}" 
+                 draggable="true" 
+                 ondragstart="drag(event)" 
+                 data-zone-id="${zone.id}"
+                 data-zone-name="${zone.name}"
+                 data-current-type="${type}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${zone.name}</strong>
+                        <small class="d-block opacity-75">ID: ${zone.id}</small>
+                    </div>
+                    <i class="fas fa-grip-vertical"></i>
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="window.refreshRuckitData()">
-                    <i class="fas fa-sync-alt me-1"></i>
-                    Refresh
-                </button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = zonesHtml;
+    }
+
+    /**
+     * Show empty state message
+     */
+    function showEmptyState(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const type = containerId.includes('regular') ? 'regular' : 'yard move';
+        
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>No ${type} zones available</p>
+                <small>Drag zones here to ${type === 'regular' ? 'remove from' : 'add to'} Yard Move Zones</small>
             </div>
         `;
+    }
 
-        tableContainer.innerHTML = tableHtml;
+    /**
+     * Update zone counts
+     */
+    function updateCounts() {
+        const regularCountEl = document.getElementById('regularCount');
+        const yardMoveCountEl = document.getElementById('yardMoveCount');
         
-        // Update stats
-        if (window.updateAssetCount) {
-            window.updateAssetCount(ruckitMappings.length);
+        if (regularCountEl) {
+            regularCountEl.textContent = `${filteredRegularZones.length} of ${regularZones.length} zones`;
         }
-        if (window.updateLastUpdated) {
-            window.updateLastUpdated();
+        if (yardMoveCountEl) {
+            yardMoveCountEl.textContent = `${filteredYardMoveZones.length} of ${yardMoveZones.length} zones`;
         }
     }
 
     /**
-     * Refresh the Ruckit mappings data
+     * Handle drag start
      */
-    window.refreshRuckitData = function() {
-        loadRuckitMappings();
+    window.drag = function(event) {
+        const zoneId = event.target.dataset.zoneId;
+        const zoneName = event.target.dataset.zoneName;
+        const currentType = event.target.dataset.currentType;
+        
+        event.dataTransfer.setData('text/plain', JSON.stringify({
+            zoneId: zoneId,
+            zoneName: zoneName,
+            currentType: currentType
+        }));
     };
 
     /**
-     * Export mappings data as CSV
+     * Allow drop
      */
-    function exportToCSV() {
-        if (ruckitMappings.length === 0) {
-            showAlert('No data to export', 'info');
+    window.allowDrop = function(event) {
+        event.preventDefault();
+    };
+
+    /**
+     * Handle drag enter
+     */
+    window.dragEnter = function(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    };
+
+    /**
+     * Handle drag leave
+     */
+    window.dragLeave = function(event) {
+        // Only remove the class if we're leaving the container itself, not a child
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+            event.currentTarget.classList.remove('drag-over');
+        }
+    };
+
+    /**
+     * Handle drop
+     */
+    window.drop = async function(event, targetType) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drag-over');
+        
+        const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+        const { zoneId, zoneName, currentType } = data;
+        
+        // Don't do anything if dropping in the same container
+        if (currentType === targetType) {
             return;
         }
+        
+        try {
+            let action, actionText;
+            
+            if (targetType === 'yardmove') {
+                action = 'add';
+                actionText = 'Adding';
+            } else {
+                action = 'remove';
+                actionText = 'Removing';
+            }
+            
+            showAlert(`${actionText} "${zoneName}" ${action === 'add' ? 'to' : 'from'} Yard Move Zones...`, 'info');
+            
+            if (action === 'add') {
+                await addYardMoveType(zoneId);
+            } else {
+                await removeYardMoveType(zoneId);
+            }
+            
+            // Move zone between arrays
+            if (targetType === 'yardmove') {
+                const zoneIndex = regularZones.findIndex(z => z.id === zoneId);
+                if (zoneIndex !== -1) {
+                    const zone = regularZones.splice(zoneIndex, 1)[0];
+                    // Update the zone's zoneTypes to include the yard move type
+                    zone.zoneTypes = [...(zone.zoneTypes || []), { id: yardMoveTypeId }];
+                    yardMoveZones.push(zone);
+                }
+            } else {
+                const zoneIndex = yardMoveZones.findIndex(z => z.id === zoneId);
+                if (zoneIndex !== -1) {
+                    const zone = yardMoveZones.splice(zoneIndex, 1)[0];
+                    // Remove yard move type from zone's zoneTypes
+                    zone.zoneTypes = (zone.zoneTypes || []).filter(zt => zt.id !== yardMoveTypeId);
+                    regularZones.push(zone);
+                }
+            }
+            
+            // Update filtered arrays and re-render
+            filteredRegularZones = [...regularZones];
+            filteredYardMoveZones = [...yardMoveZones];
+            
+            // Clear search boxes to show all zones
+            const regularSearch = document.getElementById('regularSearch');
+            const yardMoveSearch = document.getElementById('yardMoveSearch');
+            if (regularSearch) regularSearch.value = '';
+            if (yardMoveSearch) yardMoveSearch.value = '';
+            
+            renderZones();
+            showAlert(`Successfully ${action === 'add' ? 'added' : 'removed'} "${zoneName}" ${action === 'add' ? 'to' : 'from'} Yard Move Zones`, 'success');
+            
+        } catch (error) {
+            console.error('Error updating zone:', error);
+            showAlert('Error updating zone: ' + error.message, 'danger');
+        }
+    };
 
-        const headers = ['Asset Name', 'Ruckit Device', 'Ruckit Driver', 'Ruckit Token', 'GT Device ID'];
-        const csvContent = [
-            headers.join(','),
-            ...ruckitMappings.map(mapping => {
-                const details = mapping.details || {};
-                return [
-                    `"${details.name || 'N/A'}"`,
-                    `"${details['ri-device'] || 'N/A'}"`,
-                    `"${details['ri-driver'] || 'N/A'}"`,
-                    `"${details['ri-token'] || 'N/A'}"`,
-                    `"${details['gt-device'] || 'N/A'}"`
-                ].join(',');
-            })
-        ].join('\n');
+    /**
+     * Clear search input and reset filtered zones
+     */
+    window.clearSearch = function(type) {
+        const searchInput = document.getElementById(type === 'regular' ? 'regularSearch' : 'yardMoveSearch');
+        if (searchInput) {
+            searchInput.value = '';
+            filterZones(type);
+        }
+    };
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+    /**
+     * Refresh zones data
+     */
+    window.refreshZones = async function() {
+        await loadZones();
+    };
+
+    /**
+     * Export zones data as JSON
+     */
+    window.exportZones = function() {
+        const data = {
+            timestamp: new Date().toISOString(),
+            yardMoveTypeId: yardMoveTypeId,
+            regularZones: regularZones,
+            yardMoveZones: yardMoveZones,
+            stats: {
+                totalZones: regularZones.length + yardMoveZones.length,
+                regularZones: regularZones.length,
+                yardMoveZones: yardMoveZones.length,
+                filteredRegular: filteredRegularZones.length,
+                filteredYardMove: filteredYardMoveZones.length
+            }
+        };
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ruckit-assets-${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `zones-export-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        showAlert('Data exported successfully', 'success');
-    }
+        
+        showAlert('Zones data exported successfully', 'success');
+    };
 
     /**
      * Setup event listeners
      */
     function setupEventListeners() {
-        // Export button
-        const exportBtn = document.getElementById('exportBtn');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', exportToCSV);
+        // Add debounced search functionality
+        let searchTimeout;
+        
+        function debounceSearch(type) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                filterZones(type);
+            }, 300);
+        }
+        
+        // Add event listeners for search inputs
+        const regularSearch = document.getElementById('regularSearch');
+        const yardMoveSearch = document.getElementById('yardMoveSearch');
+        
+        if (regularSearch) {
+            regularSearch.addEventListener('input', () => debounceSearch('regular'));
+        }
+        
+        if (yardMoveSearch) {
+            yardMoveSearch.addEventListener('input', () => debounceSearch('yardmove'));
         }
 
-        // Keyboard shortcuts
+        // Handle keyboard shortcuts
         document.addEventListener('keydown', function(event) {
-            // Ctrl/Cmd + R to refresh
+            // Ctrl/Cmd + R to refresh zones
             if ((event.ctrlKey || event.metaKey) && event.key === 'r') {
                 event.preventDefault();
-                loadRuckitMappings();
+                loadZones();
             }
             
-            // Ctrl/Cmd + E to export
-            if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
-                event.preventDefault();
-                exportToCSV();
+            // Escape to clear search boxes
+            if (event.key === 'Escape') {
+                if (regularSearch && regularSearch.value) {
+                    window.clearSearch('regular');
+                }
+                if (yardMoveSearch && yardMoveSearch.value) {
+                    window.clearSearch('yardmove');
+                }
             }
         });
     }
 
     return {
         /**
-         * initialize() is called only once when the Add-In is first loaded.
+         * initialize() is called only once when the Add-In is first loaded. Use this function to initialize the
+         * Add-In's state such as default values or make API requests (MyGeotab or external) to ensure interface
+         * is ready for the user.
+         * @param {object} freshApi - The GeotabApi object for making calls to MyGeotab.
+         * @param {object} freshState - The page state object allows access to URL, page navigation and global group filter.
+         * @param {function} initializeCallback - Call this when your initialize route is complete. Since your initialize routine
+         *        might be doing asynchronous operations, you must call this method when the Add-In is ready
+         *        for display to the user.
          */
         initialize: function (freshApi, freshState, initializeCallback) {
             api = freshApi;
             state = freshState;
 
-            elAddin = document.getElementById('ruckitAssets');
+            elAddin = document.getElementById('yardMoveZones');
 
             if (state.translate) {
                 state.translate(elAddin || '');
@@ -268,25 +615,46 @@ geotab.addin.ruckitAssets = function () {
 
         /**
          * focus() is called whenever the Add-In receives focus.
+         *
+         * The first time the user clicks on the Add-In menu, initialize() will be called and when completed, focus().
+         * focus() will be called again when the Add-In is revisited. Note that focus() will also be called whenever
+         * the global state of the MyGeotab application changes, for example, if the user changes the global group
+         * filter in the UI.
+         *
+         * @param {object} freshApi - The GeotabApi object for making calls to MyGeotab.
+         * @param {object} freshState - The page state object allows access to URL, page navigation and global group filter.
          */
         focus: function (freshApi, freshState) {
             api = freshApi;
             state = freshState;
 
+            // Ensure current database is in Firestore
+            ensureDatabaseInFirestore();
+
             // Setup event listeners
             setupEventListeners();
             
-            // Load Ruckit mappings data
-            loadRuckitMappings();
+            // Load zones data
+            loadZones();
             
             // Show main content
             if (elAddin) {
                 elAddin.style.display = 'block';
             }
+
+            // Make functions globally accessible
+            window.filterZones = filterZones;
+            window.openCreateZone = openCreateZone;
+            window.loadZones = loadZones;
         },
 
         /**
          * blur() is called whenever the user navigates away from the Add-In.
+         *
+         * Use this function to save the page state or commit changes to a data store or release memory.
+         *
+         * @param {object} freshApi - The GeotabApi object for making calls to MyGeotab.
+         * @param {object} freshState - The page state object allows access to URL, page navigation and global group filter.
          */
         blur: function () {
             // Hide main content
